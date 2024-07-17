@@ -36,7 +36,7 @@ app.add_middleware(
 class StudentInformationBase(BaseModel):
     first_name: str
     last_name: str
-    student_id: str
+    student_id: int
     birth_date: str
     gender: str
 
