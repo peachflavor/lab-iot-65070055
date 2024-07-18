@@ -1,17 +1,14 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI, Depends, Response, APIRouter, HTTPException
+from fastapi import FastAPI, Depends, Response, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
-from typing import List
 
-# Import models and database connection
+# Import models
 from database import SessionLocal, engine
 import models
 
-# Create database and tables
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
@@ -32,65 +29,131 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Pydantic schemas
-class StudentInformationBase(BaseModel):
-    first_name: str
-    last_name: str
-    student_id: int
-    birth_date: str
-    gender: str
+# https://fastapi.tiangolo.com/tutorial/sql-databases/#crud-utils
 
-class StudentInformationCreate(StudentInformationBase):
-    pass
+@router_v1.get('/books')
+async def get_books(db: Session = Depends(get_db)):
+    return db.query(models.Book).all()
 
-class StudentInformationUpdate(StudentInformationBase):
-    pass
+@router_v1.get('/books/{book_id}')
+async def get_book(response: Response, book_id: int, db: Session = Depends(get_db)):
+    if db.query(models.Book).filter(models.Book.id == book_id).first() is None:
+        response.status_code = 404
+        return {
+            'message': 'Book not found'
+        }
+    return db.query(models.Book).filter(models.Book.id == book_id).first()
 
-class StudentInformation(StudentInformationBase):
-    id: int
+@router_v1.post('/books')
+async def create_book(book: dict, response: Response, db: Session = Depends(get_db)):
+    # TODO: Add validation
 
-    class Config:
-        orm_mode = True
+    if 'title' not in book or 'author' not in book or 'year' not in book or 'is_published' not in book:
+        response.status_code = 400
+        return {
+            'message': 'Required data is missing'
+        }
+    elif db.query(models.Book).filter(models.Book.title == book['title']).first() is not None:
+        response.status_code = 409
+        return {
+            'message': 'Book already exists'
+        }
 
-# API endpoints
-@router_v1.get('/student_information', response_model=List[StudentInformation])
-async def get_student_information(db: Session = Depends(get_db)):
-    return db.query(models.StudentInformation).all()
-
-@router_v1.get('/student_information/{student_id}', response_model=StudentInformation)
-async def get_student_information(student_id: int, db: Session = Depends(get_db)):
-    student = db.query(models.StudentInformation).filter(models.StudentInformation.student_id == student_id).first()
-    if student is None:
-        raise HTTPException(status_code=404, detail="Student not found")
-    return student
-
-@router_v1.post('/student_information', response_model=StudentInformation, status_code=201)
-async def create_student_information(student: StudentInformationCreate, db: Session = Depends(get_db)):
-    db_student = models.StudentInformation(**student.dict())
-    db.add(db_student)
+    newbook = models.Book(title=book['title'], author=book['author'], year=book['year'], is_published=book['is_published'])
+    db.add(newbook)
     db.commit()
-    db.refresh(db_student)
-    return db_student
+    db.refresh(newbook)
+    response.status_code = 201
+    return newbook
 
-@router_v1.put('/student_information/{student_id}', response_model=StudentInformation)
-async def update_student_information(student_id: int, student: StudentInformationUpdate, db: Session = Depends(get_db)):
-    db_student = db.query(models.StudentInformation).filter(models.StudentInformation.student_id == student_id).first()
-    if db_student is None:
-        raise HTTPException(status_code=404, detail="Student not found")
-    for key, value in student.dict().items():
-        setattr(db_student, key, value)
+@router_v1.patch('/books/{book_id}')
+async def update_book(response: Response, book_id: int, book: dict, db: Session = Depends(get_db)):
+    if db.query(models.Book).filter(models.Book.id == book_id).first() is None:
+        response.status_code = 404
+        return {
+            'message': 'Book not exists'
+        }
+    db.query(models.Book).filter(models.Book.id == book_id).update(book)
     db.commit()
-    db.refresh(db_student)
-    return db_student
+    return {
+        'message': 'Book updated'
+    }
 
-@router_v1.delete('/student_information/{student_id}', status_code=204)
-async def delete_student_information(student_id: int, db: Session = Depends(get_db)):
-    db_student = db.query(models.StudentInformation).filter(models.StudentInformation.student_id == student_id).first()
-    if db_student is None:
-        raise HTTPException(status_code=404, detail="Student not found")
-    db.delete(db_student)
+@router_v1.delete('/books/{book_id}')
+async def delete_book(response: Response, book_id: int, db: Session = Depends(get_db)):
+    if db.query(models.Book).filter(models.Book.id == book_id).first() is None:
+        response.status_code = 404
+        return {
+            'message': 'Book not exists'
+        }
+
+    db.query(models.Book).filter(models.Book.id == book_id).delete()
     db.commit()
-    return Response(status_code=204)
+    return {
+        'message': 'Book deleted'
+    }
+
+# Students
+
+@router_v1.get('/students')
+async def get_students(db: Session = Depends(get_db)):
+    return db.query(models.Student).all()
+
+@router_v1.get('/students/{student_id}')
+async def get_student(response: Response, student_id: int, db: Session = Depends(get_db)):
+    if db.query(models.Student).filter(models.Student.id == student_id).first() is None:
+        response.status_code = 404
+        return {
+            'message': 'Student not found'
+        }
+    return db.query(models.Student).filter(models.Student.id == student_id).first()
+
+@router_v1.post('/students')
+async def create_student(student: dict, response: Response, db: Session = Depends(get_db)):
+
+    if 'firstname' not in student or 'lastname' not in student or 'dob' not in student or 'id' not in student:
+        response.status_code = 400
+        return {
+            'message': 'Required data is missing'
+        }
+    elif db.query(models.Student).filter(models.Student.id == student['id']).first() is not None:
+        response.status_code = 409
+        return {
+            'message': 'Student already exists'
+        }
+
+    newstudent = models.Student(firstname = student['firstname'], lastname = student['lastname'], dob = student['dob'], id = student['id'], gender = student['gender'])
+    db.add(newstudent)
+    db.commit()
+    db.refresh(newstudent)
+    response.status_code = 201
+    return newstudent
+
+@router_v1.delete('/students/{student_id}')
+async def delete_student(response: Response, student_id: int, db: Session = Depends(get_db)):
+    if db.query(models.Student).filter(models.Student.id == student_id).first() is None:
+        response.status_code = 404
+        return {
+            'message': 'Student not exists'
+        }
+    db.query(models.Student).filter(models.Student.id == student_id).delete()
+    db.commit()
+    return {
+        'message': 'Student deleted'
+    }
+
+@router_v1.patch('/students/{student_id}')
+async def update_student(response: Response, student_id: int, student: dict, db: Session = Depends(get_db)):
+    if db.query(models.Student).filter(models.Student.id == student_id).first() is None:
+        response.status_code = 404
+        return {
+            'message': 'Student not exists'
+        }
+    db.query(models.Student).filter(models.Student.id == student_id).update(student)
+    db.commit()
+    return {
+        'message': 'Student updated'
+    }
 
 app.include_router(router_v1)
 
