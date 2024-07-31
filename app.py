@@ -156,6 +156,57 @@ async def update_student(response: Response, student_id: int, student: dict, db:
         'message': 'Student updated'
     }
 
+# Menus
+@router_v1.get('/menus')
+async def get_menus(db: Session = Depends(get_db)):
+    return db.query(models.Menu).all()
+
+@router_v1.get('/menus/{menu_id}')
+async def get_menu(menu_id: int, db: Session = Depends(get_db)):
+    return db.query(models.Menu).filter(models.Menu.id == menu_id).first()
+
+@router_v1.post('/menus')
+async def create_menu(menu: dict, response: Response, db: Session = Depends(get_db)):
+    newmenu = models.Menu(name=menu['name'], price=menu['price'], is_published=menu['is_published'], detail=menu['detail'], ingredient=menu['ingredient'])
+    db.add(newmenu)
+    db.commit()
+    db.refresh(newmenu)
+    response.status_code = 201
+    return newmenu
+
+@router_v1.patch('/menus/{menu_id}')
+async def update_menu(menu_id: int, menu: dict, db: Session = Depends(get_db)):
+    db.query(models.Menu).filter(models.Menu.id == menu_id).update(menu)
+    db.commit()
+    return {
+        'message': 'Menu updated'
+    }
+
+@router_v1.delete('/menus/{menu_id}')
+async def delete_menu(menu_id: int, db: Session = Depends(get_db)):
+    db.query(models.Menu).filter(models.Menu.id == menu_id).delete()
+    db.commit()
+    return {
+        'message': 'Menu deleted'
+    }
+
+#Staffs
+@router_v1.get('/staffs')
+async def get_orders(db: Session = Depends(get_db)):
+    return db.query(models.Order).all()
+
+@router_v1.get('/staffs/{order_id}')
+async def get_order(order_id: int, db: Session = Depends(get_db)):
+    return db.query(models.Order).filter(models.Order.id == order_id).first()
+
+@router_v1.delete('/staffs/{order_id}')
+async def delete_order(order_id: int, response: Response, db: Session = Depends(get_db)):
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    db.delete(order)
+    db.commit()
+    response.status_code = 204
+    return
+
 app.include_router(router_v1)
 
 if __name__ == '__main__':
